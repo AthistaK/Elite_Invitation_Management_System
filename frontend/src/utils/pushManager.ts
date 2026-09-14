@@ -11,6 +11,17 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+function arrayBuffersEqual(buf1: ArrayBuffer | ArrayBufferView | null | undefined, buf2: ArrayBuffer | ArrayBufferView): boolean {
+  if (!buf1 || !buf2) return false;
+  const u1 = buf1 instanceof ArrayBuffer ? new Uint8Array(buf1) : new Uint8Array(buf1.buffer, buf1.byteOffset, buf1.byteLength);
+  const u2 = buf2 instanceof ArrayBuffer ? new Uint8Array(buf2) : new Uint8Array(buf2.buffer, buf2.byteOffset, buf2.byteLength);
+  if (u1.byteLength !== u2.byteLength) return false;
+  for (let i = 0; i < u1.byteLength; i++) {
+    if (u1[i] !== u2[i]) return false;
+  }
+  return true;
+}
+
 export function isPushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -48,7 +59,8 @@ export async function subscribeToPushNotifications(): Promise<{ success: boolean
       registration = await navigator.serviceWorker.register('/sw.js');
     }
 
-    await navigator.serviceWorker.ready;
+    // Ensure service worker is ready before accessing pushManager
+    const readyRegistration = await navigator.serviceWorker.ready;
 
     // Fetch VAPID Public Key from backend
     const vapidRes = await api.get('/notifications/vapid-public-key');
@@ -60,11 +72,59 @@ export async function subscribeToPushNotifications(): Promise<{ success: boolean
 
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-    // Subscribe to Push Manager
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey as any,
-    });
+    // Check existing subscription
+    const existingSubscription = await readyRegistration.pushManager.getSubscription();
+
+    if (existingSubscription) {
+      console.log('[PUSH] Existing subscription found');
+      const existingKey = existingSubscription.options?.applicationServerKey;
+      const keysMatch = existingKey ? arrayBuffersEqual(existingKey, applicationServerKey) : false;
+
+      if (!keysMatch) {
+        console.log('[PUSH] Existing subscription incompatible with current VAPID key');
+        console.log('[PUSH] Unsubscribing old subscription');
+        try {
+          await existingSubscription.unsubscribe();
+        } catch (unsubErr) {
+          console.warn('[PUSH] Diagnostic warning - failed to unsubscribe incompatible subscription:', unsubErr);
+        }
+      }
+    }
+
+    let subscription: PushSubscription;
+    try {
+      console.log('[PUSH] Creating new push subscription');
+      subscription = await readyRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as any,
+      });
+      console.log('[PUSH] New subscription registered successfully');
+    } catch (subErr: any) {
+      if (
+        subErr?.name === 'InvalidStateError' ||
+        (subErr?.message && (subErr.message.includes('applicationServerKey') || subErr.message.includes('different')))
+      ) {
+        console.log('[PUSH] Existing subscription incompatible with current VAPID key');
+        console.log('[PUSH] Unsubscribing old subscription');
+        try {
+          const currentSub = await readyRegistration.pushManager.getSubscription();
+          if (currentSub) {
+            await currentSub.unsubscribe();
+          }
+        } catch (unsubErr) {
+          console.warn('[PUSH] Diagnostic warning - failed to unsubscribe during error recovery:', unsubErr);
+        }
+
+        console.log('[PUSH] Creating new push subscription');
+        subscription = await readyRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as any,
+        });
+        console.log('[PUSH] New subscription registered successfully');
+      } else {
+        throw subErr;
+      }
+    }
 
     const subscriptionJson = subscription.toJSON();
 
@@ -92,7 +152,11 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
     if (subscription) {
       const endpoint = subscription.endpoint;
-      await subscription.unsubscribe();
+      try {
+        await subscription.unsubscribe();
+      } catch (unsubErr) {
+        console.warn('[PUSH] Diagnostic warning - error during manual unsubscribe:', unsubErr);
+      }
       await api.post('/notifications/unsubscribe', { endpoint }).catch(() => {});
     } else {
       await api.post('/notifications/unsubscribe', {}).catch(() => {});
@@ -104,3 +168,4 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
     return { success: false, message: error.message || 'Failed to unsubscribe.' };
   }
 }
+
