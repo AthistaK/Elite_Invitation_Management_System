@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { User as UserIcon, Mail, Phone, Lock, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Phone, Lock, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
+import { getFileUrl, validateImageFile, createPreviewUrl, revokePreviewUrl } from '../../utils/fileUtils';
 
 export const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();
@@ -14,18 +15,48 @@ export const Profile: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
 
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(
-    user?.profilePhoto ? `http://localhost:5000${user.profilePhoto}` : null
-  );
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Sync state whenever authenticated user changes/loads
+  useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || '');
+      setPhone(user.phone || '');
+      if (user.profilePhoto) {
+        setPreviewUrl(getFileUrl(user.profilePhoto));
+      }
+    }
+  }, [user]);
+
+  // Clean up object URLs to prevent memory leaks on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        revokePreviewUrl(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const handlePhotoChange = (file: File | null) => {
     if (!file) return;
+    const check = validateImageFile(file);
+    if (!check.valid) {
+      setError(check.error || 'Invalid file.');
+      return;
+    }
+    setError('');
+
+    // Revoke previous blob URL if exists
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      revokePreviewUrl(previewUrl);
+    }
+
     setProfilePhoto(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewUrl(createPreviewUrl(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,7 +128,7 @@ export const Profile: React.FC = () => {
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-brand-700 text-white flex items-center justify-center font-bold text-2xl">
-                    {fullName.charAt(0).toUpperCase()}
+                    {fullName.charAt(0).toUpperCase() || 'C'}
                   </div>
                 )}
 

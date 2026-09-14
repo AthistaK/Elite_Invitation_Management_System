@@ -4,6 +4,8 @@ import path from 'path';
 import { prisma } from '../config/prisma';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { sendPushNotificationToUser } from '../utils/pushService';
+import { validateUploadedFile, processFileStorage } from '../utils/storage';
 
 // Get invitations list
 export async function getInvitations(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -166,16 +168,33 @@ export async function createInvitation(req: AuthenticatedRequest, res: Response)
     if (req.user!.role !== 'CHAIRMAN') {
       const chairman = await prisma.user.findFirst({ where: { role: 'CHAIRMAN' } });
       if (chairman) {
+        console.log(`[PUSH] Invitation uploaded`);
+        console.log(`[PUSH] Target Chairman ID: ${chairman.id}`);
+        const title = invitation.priority === 'IMPORTANT' ? '🚨 IMPORTANT Invitation Uploaded' : 'New Invitation Uploaded';
+        const message = `${req.user!.fullName} uploaded a new invitation for "${invitation.organizationFamilyName}". Requested Role: ${validInvitationRole.replace(/_/g, ' ')}.`;
+        
         await prisma.notification.create({
           data: {
             userId: chairman.id,
             type: 'INVITATION_UPLOAD',
-            title: 'New Invitation Uploaded',
-            message: `${req.user!.fullName} uploaded an invitation for "${invitation.organizationFamilyName}". Requested Role: ${validInvitationRole.replace(/_/g, ' ')}.`,
+            title,
+            message,
             relatedEntity: 'Invitation',
             relatedEntityId: invitation.id,
           },
         });
+
+        const targetUrl = `/chairman/invitations?invitationId=${invitation.id}`;
+
+        // Trigger Web Push Notification safely without blocking invitation upload response
+        sendPushNotificationToUser(chairman.id, {
+          title: 'New Invitation',
+          message: 'A new invitation has been uploaded.',
+          type: 'INVITATION_UPLOADED',
+          invitationId: invitation.id,
+          entityId: invitation.id,
+          url: targetUrl,
+        }).catch((err) => console.error('[PUSH] Invitation push failed:', err));
       }
     }
 
@@ -309,16 +328,26 @@ export async function acceptInvitation(req: AuthenticatedRequest, res: Response)
 
     // Notify uploader strictly for their user ID
     if (updated.uploadedById !== req.user!.id) {
+      const message = `Your uploaded invitation for "${updated.organizationFamilyName}" was ACCEPTED by the Chairman.`;
       await prisma.notification.create({
         data: {
           userId: updated.uploadedById,
           type: 'INVITATION_ACCEPTED',
           title: 'Invitation Accepted',
-          message: `Your uploaded invitation for "${updated.organizationFamilyName}" was ACCEPTED by the Chairman.`,
+          message,
           relatedEntity: 'Invitation',
           relatedEntityId: updated.id,
         },
       });
+
+      sendPushNotificationToUser(updated.uploadedById, {
+        title: 'Invitation Accepted',
+        message,
+        type: 'INVITATION_ACCEPTED',
+        invitationId: updated.id,
+        entityId: updated.id,
+        url: `/management/invitations?invitationId=${updated.id}`,
+      }).catch((err) => console.error('[PUSH] Accept push trigger error:', err));
     }
 
     await logActivity(
@@ -353,16 +382,26 @@ export async function rejectInvitation(req: AuthenticatedRequest, res: Response)
 
     // Notify uploader strictly for their user ID
     if (updated.uploadedById !== req.user!.id) {
+      const message = `Your uploaded invitation for "${updated.organizationFamilyName}" was REJECTED by the Chairman.`;
       await prisma.notification.create({
         data: {
           userId: updated.uploadedById,
           type: 'INVITATION_REJECTED',
           title: 'Invitation Rejected',
-          message: `Your uploaded invitation for "${updated.organizationFamilyName}" was REJECTED by the Chairman.`,
+          message,
           relatedEntity: 'Invitation',
           relatedEntityId: updated.id,
         },
       });
+
+      sendPushNotificationToUser(updated.uploadedById, {
+        title: 'Invitation Rejected',
+        message,
+        type: 'INVITATION_REJECTED',
+        invitationId: updated.id,
+        entityId: updated.id,
+        url: `/management/invitations?invitationId=${updated.id}`,
+      }).catch((err) => console.error('[PUSH] Reject push trigger error:', err));
     }
 
     await logActivity(

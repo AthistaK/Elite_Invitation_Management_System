@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, Lock } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { useNotifications } from '../../context/NotificationContext';
@@ -7,7 +8,20 @@ import { useAuth } from '../../context/AuthContext';
 export const NotificationsPage: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, loading } = useNotifications();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isChairman = user?.role === 'CHAIRMAN';
+
+  const handleNotificationClick = (n: any) => {
+    if (!n.isRead) {
+      markAsRead(n.id);
+    }
+    if (n.relatedEntity === 'Invitation' && n.relatedEntityId) {
+      const targetUrl = isChairman
+        ? `/chairman/invitations?invitationId=${n.relatedEntityId}`
+        : `/management/invitations?invitationId=${n.relatedEntityId}`;
+      navigate(targetUrl);
+    }
+  };
 
   return (
     <DashboardLayout title="System Notifications">
@@ -48,7 +62,7 @@ export const NotificationsPage: React.FC = () => {
             notifications.map((n) => (
               <div
                 key={n.id}
-                onClick={() => !n.isRead && markAsRead(n.id)}
+                onClick={() => handleNotificationClick(n)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                   n.isRead
                     ? 'bg-white border-slate-200/80 text-slate-600'

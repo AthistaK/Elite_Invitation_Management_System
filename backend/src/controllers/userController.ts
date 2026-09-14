@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { sendPushNotificationToUser } from '../utils/pushService';
 
 // Get list of management users (Chairman only)
 export async function getUsers(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -168,13 +169,20 @@ export async function approveUser(req: AuthenticatedRequest, res: Response): Pro
       data: { accountStatus: 'APPROVED' },
     });
 
+    const approvalMessage = 'Your Management account registration has been approved by the Chairman. You may now sign in.';
     await prisma.notification.create({
       data: {
         userId: updated.id,
         type: 'MEMBER_APPROVAL',
         title: 'Account Approved',
-        message: 'Your Management account registration has been approved by the Chairman. You may now sign in.',
+        message: approvalMessage,
       },
+    });
+
+    await sendPushNotificationToUser(updated.id, {
+      title: 'Account Approved',
+      message: approvalMessage,
+      url: '/portal',
     });
 
     await logActivity(
@@ -207,13 +215,20 @@ export async function rejectUser(req: AuthenticatedRequest, res: Response): Prom
       data: { accountStatus: 'REJECTED' },
     });
 
+    const rejectionMessage = 'Your Management registration request was reviewed and rejected.';
     await prisma.notification.create({
       data: {
         userId: updated.id,
         type: 'MEMBER_REJECTION',
         title: 'Registration Update',
-        message: 'Your Management registration request was reviewed and rejected.',
+        message: rejectionMessage,
       },
+    });
+
+    await sendPushNotificationToUser(updated.id, {
+      title: 'Registration Update',
+      message: rejectionMessage,
+      url: '/portal',
     });
 
     await logActivity(
@@ -354,3 +369,119 @@ export async function deleteUser(req: AuthenticatedRequest, res: Response): Prom
     res.status(500).json({ error: error.message || 'Failed to delete member.' });
   }
 }
+
+// Transfer Chairman Authority to New User (Chairman Only)
+export async function transferChairman(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { newFullName, newEmail, newPassword, currentPassword } = req.body;
+
+    if (!newFullName || !newEmail || !newPassword || !currentPassword) {
+      res.status(400).json({
+        error: 'All fields (New Chairman Name, New Email, New Password, Current Password) are required.',
+      });
+      return;
+    }
+
+    if (req.user!.role !== 'CHAIRMAN') {
+      res.status(403).json({ error: 'Only the current Chairman can transfer authority.' });
+      return;
+    }
+
+    // Verify current Chairman password
+    const currentChairman = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+    });
+
+    if (!currentChairman) {
+      res.status(404).json({ error: 'Chairman account not found.' });
+      return;
+    }
+
+    const isPasswordValid = await bcrypt.compare(currentPassword, currentChairman.passwordHash);
+    if (!isPasswordValid) {
+      res.status(401).json({ error: 'Incorrect current password. Transfer denied.' });
+      return;
+    }
+
+    const normalizedNewEmail = newEmail.toLowerCase().trim();
+    if (normalizedNewEmail === currentChairman.email.toLowerCase()) {
+      res.status(400).json({ error: 'New Chairman email must be different from current Chairman email.' });
+      return;
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    // Execute atomic transfer in a database transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Demote current Chairman to OFFICE role & INACTIVE status
+      await tx.user.update({
+        where: { id: currentChairman.id },
+        data: {
+          role: 'OFFICE',
+          accountStatus: 'INACTIVE',
+        },
+      });
+
+      // 2. Check if user with new email already exists
+      const existingUser = await tx.user.findUnique({
+        where: { email: normalizedNewEmail },
+      });
+
+      let newChairmanId = '';
+
+      if (existingUser) {
+        // Promote existing member to CHAIRMAN
+        const updatedUser = await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            fullName: newFullName.trim(),
+            passwordHash: newPasswordHash,
+            role: 'CHAIRMAN',
+            accountStatus: 'APPROVED',
+          },
+        });
+        newChairmanId = updatedUser.id;
+      } else {
+        // Create new CHAIRMAN user
+        const newUser = await tx.user.create({
+          data: {
+            fullName: newFullName.trim(),
+            email: normalizedNewEmail,
+            passwordHash: newPasswordHash,
+            role: 'CHAIRMAN',
+            accountStatus: 'APPROVED',
+          },
+        });
+        newChairmanId = newUser.id;
+      }
+
+      // Log activity
+      await tx.activityLog.create({
+        data: {
+          userId: currentChairman.id,
+          action: 'CHAIRMAN_TRANSFERRED',
+          description: `Chairman authority transferred from ${currentChairman.fullName} (${currentChairman.email}) to ${newFullName.trim()} (${normalizedNewEmail}).`,
+          entityType: 'User',
+          entityId: newChairmanId,
+        },
+      });
+
+      // Notify new Chairman in DB
+      await tx.notification.create({
+        data: {
+          userId: newChairmanId,
+          type: 'MEMBER_APPROVAL',
+          title: 'Chairman Authority Transferred',
+          message: `Executive Chairman authority has been transferred to you by ${currentChairman.fullName}. You may now log in to the Chairman Portal.`,
+        },
+      });
+    });
+
+    res.json({
+      message: 'Chairman authority transferred successfully. Your session has ended.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to transfer Chairman authority.' });
+  }
+}
+

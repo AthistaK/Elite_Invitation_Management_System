@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -16,14 +17,42 @@ import reportRoutes from './routes/reportRoutes';
 import exportRoutes from './routes/exportRoutes';
 import profileRoutes from './routes/profileRoutes';
 import { triggerDueReminders } from './controllers/reminderController';
+import { VAPID_PUBLIC_KEY } from './config/vapid';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// CORS configuration
+// Security HTTP headers with Helmet (allow cross-origin resources for image previews & PWA assets)
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
+// Production-ready CORS configuration
 app.use(
   cors({
-    origin: '*', // Allow local frontend connections
+    origin: (origin, callback) => {
+      // Always allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+
+      const configuredOrigins = process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+        : [];
+
+      if (
+        configuredOrigins.includes('*') ||
+        configuredOrigins.includes(origin) ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:')
+      ) {
+        return callback(null, true);
+      }
+
+      console.warn('Blocked CORS request from origin:', origin);
+      return callback(new Error('Blocked by CORS policy'));
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -50,12 +79,17 @@ app.use('/api/v1/profile', profileRoutes);
 
 // Health Check
 app.get('/api/v1/health', (req, res) => {
-  res.json({ status: 'ok', service: 'EIMS Backend API', timestamp: new Date() });
+  res.json({
+    status: 'ok',
+    service: 'EIMS Backend API',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date(),
+  });
 });
 
-// Periodic Reminder Trigger (runs every 5 seconds for responsive alert delivery)
+// Production Background Worker for Due Reminders (independent of frontend tab)
 setInterval(() => {
-  triggerDueReminders();
+  triggerDueReminders().catch((err) => console.error('Error in reminder cron worker:', err));
 }, 5000);
 
 // Global Error Handler
@@ -64,6 +98,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   const status = err.status || 500;
   res.status(status).json({
     error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' ? { stack: err.stack } : {}),
   });
 });
 
@@ -72,5 +107,6 @@ app.listen(PORT, () => {
   console.log(` Elite Invitation Management System (EIMS) API`);
   console.log(` Server running on http://localhost:${PORT}`);
   console.log(` Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(` VAPID Public Key Loaded: ${VAPID_PUBLIC_KEY.slice(0, 12)}...`);
   console.log(`=================================================`);
 });

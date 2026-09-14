@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { sendPushNotificationToUser } from '../utils/pushService';
 
 export async function updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -50,6 +51,25 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
       },
     });
 
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        type: 'PROFILE_UPDATE',
+        title: 'Profile Updated',
+        message: 'Your profile details have been successfully updated.',
+        relatedEntity: 'User',
+        relatedEntityId: user.id,
+      },
+    });
+
+    sendPushNotificationToUser(user.id, {
+      title: 'Profile Updated',
+      message: 'Your profile details have been successfully updated.',
+      type: 'PROFILE_UPDATE',
+      entityId: user.id,
+      url: user.role === 'CHAIRMAN' ? '/chairman/profile' : '/management/dashboard',
+    }).catch((err) => console.error('[WebPush Trigger Error]', err));
+
     await logActivity(
       user.id,
       'PROFILE_UPDATED',
@@ -63,7 +83,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
       user: {
         id: updatedUser.id,
         fullName: updatedUser.fullName,
-        email: updatedUser.email, // Email remains unchanged / READ-ONLY
+        email: updatedUser.email,
         phone: updatedUser.phone,
         profilePhoto: updatedUser.profilePhoto,
         role: updatedUser.role,

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Upload, CheckCircle2, AlertCircle, Calendar, Flag, Tag, Users, FileCheck, Crown } from 'lucide-react';
+import { Camera, Upload, CheckCircle2, AlertCircle, Calendar, Flag, Tag, Users, FileCheck, Crown, Image as ImageIcon } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { LiveCameraModal } from '../../components/invitations/LiveCameraModal';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { createPreviewUrl, revokePreviewUrl } from '../../utils/fileUtils';
 
 export const UploadInvitation: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export const UploadInvitation: React.FC = () => {
   const [category, setCategory] = useState<'COLLEGE' | 'FAMILY' | 'GOVERNMENT' | 'PERSONAL' | 'OTHERS'>('COLLEGE');
   const [remarks, setRemarks] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [dragActive, setDragActive] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
@@ -26,11 +28,19 @@ export const UploadInvitation: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        revokePreviewUrl(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const handleFileChange = (file: File | null) => {
     if (!file) return;
 
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
       setError('Invalid file format. Only JPG, JPEG, PNG, WEBP, and PDF files are allowed.');
       return;
     }
@@ -41,7 +51,16 @@ export const UploadInvitation: React.FC = () => {
     }
 
     setError('');
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      revokePreviewUrl(previewUrl);
+    }
+
     setAttachment(file);
+    if (file.type.startsWith('image/')) {
+      setPreviewUrl(createPreviewUrl(file));
+    } else {
+      setPreviewUrl(null);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -179,18 +198,42 @@ export const UploadInvitation: React.FC = () => {
             </div>
 
             {attachment && (
-              <div className="mt-3 p-3 rounded-xl bg-brand-50 border border-brand-200 text-brand-800 text-xs font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-2 truncate">
-                  <FileCheck className="w-4 h-4 text-brand-600 shrink-0" /> {attachment.name} (
-                  {(attachment.size / (1024 * 1024)).toFixed(2)} MB)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAttachment(null)}
-                  className="text-rose-600 hover:underline cursor-pointer ml-2"
-                >
-                  Remove
-                </button>
+              <div className="mt-4 p-4 rounded-2xl bg-brand-50/60 border border-brand-200 text-brand-900 text-xs font-semibold space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 truncate font-bold text-slate-800">
+                    <FileCheck className="w-4 h-4 text-brand-600 shrink-0" /> {attachment.name} (
+                    {(attachment.size / (1024 * 1024)).toFixed(2)} MB)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (previewUrl) revokePreviewUrl(previewUrl);
+                      setAttachment(null);
+                      setPreviewUrl(null);
+                    }}
+                    className="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer ml-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                {previewUrl && (
+                  <div className="mt-2 pt-3 border-t border-brand-200/60 flex flex-col sm:flex-row items-center gap-3">
+                    <div className="w-full sm:w-48 h-32 rounded-xl border border-slate-300 overflow-hidden bg-slate-900 flex items-center justify-center">
+                      <img
+                        src={previewUrl}
+                        alt="Selected Preview"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    <div className="text-slate-600 text-xs font-medium space-y-1">
+                      <p className="font-bold text-slate-800 flex items-center gap-1">
+                        <ImageIcon className="w-3.5 h-3.5 text-brand-600" /> Immediate Image Preview Ready
+                      </p>
+                      <p className="text-[11px]">This image snapshot will be attached and stored with the invitation record upon submission.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

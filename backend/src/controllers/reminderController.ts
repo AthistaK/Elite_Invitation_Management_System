@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../config/prisma';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { sendPushNotificationToUser } from '../utils/pushService';
 
 export async function createReminder(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -114,15 +115,22 @@ export async function triggerDueReminders(): Promise<void> {
     });
 
     for (const reminder of activeReminders) {
+      const message = `Reminder: You have an upcoming invitation for "${reminder.invitation.organizationFamilyName}" scheduled on ${new Date(reminder.invitation.date).toLocaleDateString()}.`;
       await prisma.notification.create({
         data: {
           userId: reminder.userId,
           type: 'REMINDER_DUE',
           title: 'Invitation Reminder Due',
-          message: `Reminder: You have an upcoming invitation for "${reminder.invitation.organizationFamilyName}" scheduled on ${new Date(reminder.invitation.date).toLocaleDateString()}.`,
+          message,
           relatedEntity: 'Invitation',
           relatedEntityId: reminder.invitationId,
         },
+      });
+
+      await sendPushNotificationToUser(reminder.userId, {
+        title: 'Invitation Reminder Due',
+        message,
+        url: '/chairman/invitations',
       });
 
       await prisma.reminder.update({

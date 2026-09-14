@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Shield, Lock, Mail, User, KeyRound, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Shield, Lock, Mail, User, KeyRound, AlertCircle, ArrowLeft, LogIn } from 'lucide-react';
 import { api } from '../../services/api';
 
 export const ChairmanSetup: React.FC = () => {
@@ -51,6 +51,8 @@ export const ChairmanSetup: React.FC = () => {
     }
   };
 
+  const isAlreadyExistsError = error.toLowerCase().includes('already exists');
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-6 relative">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative z-10">
@@ -71,9 +73,24 @@ export const ChairmanSetup: React.FC = () => {
         </p>
 
         {error && (
-          <div className="mt-4 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mt-4 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span className="font-semibold">{error}</span>
+            </div>
+            {isAlreadyExistsError && (
+              <div className="pt-2 border-t border-rose-500/20">
+                <p className="text-[11px] text-slate-300 mb-2">
+                  The Chairman account is already initialized in the system.
+                </p>
+                <Link
+                  to="/chairman/login"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Sign In to Chairman Portal
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -146,6 +163,13 @@ export const ChairmanSetup: React.FC = () => {
             {loading ? 'Initializing System...' : 'Create Chairman Account'}
           </button>
         </form>
+
+        <div className="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
+          Already initialized?{' '}
+          <Link to="/chairman/login" className="text-brand-400 font-bold hover:underline">
+            Sign In Here
+          </Link>
+        </div>
       </div>
     </div>
   );

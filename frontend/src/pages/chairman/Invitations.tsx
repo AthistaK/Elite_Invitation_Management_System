@@ -66,6 +66,27 @@ export const Invitations: React.FC = () => {
     fetchInvitations();
   }, [statusFilter, priorityFilter, categoryFilter, roleFilter]);
 
+  const invitationIdParam = searchParams.get('invitationId');
+
+  useEffect(() => {
+    if (invitationIdParam) {
+      const existing = invitations.find((i) => i.id === invitationIdParam);
+      if (existing) {
+        setSelectedInvitation(existing);
+        setDetailModalOpen(true);
+      } else {
+        api.get(`/invitations/${invitationIdParam}`)
+          .then((res) => {
+            if (res.data.invitation) {
+              setSelectedInvitation(res.data.invitation);
+              setDetailModalOpen(true);
+            }
+          })
+          .catch((err) => console.error('Failed to fetch invitation by URL ID:', err));
+      }
+    }
+  }, [invitationIdParam, invitations]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchInvitations();

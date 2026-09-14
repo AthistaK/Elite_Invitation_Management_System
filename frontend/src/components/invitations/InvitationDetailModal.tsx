@@ -1,7 +1,7 @@
-import React from 'react';
-import { X, Calendar, User, FileText, CheckCircle2, XCircle, Clock, ExternalLink, Crown } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Calendar, User, FileText, CheckCircle2, XCircle, Clock, ExternalLink, Crown, ImageOff } from 'lucide-react';
 import { Invitation } from '../../types';
-import { API_BASE_URL } from '../../services/api';
+import { getFileUrl } from '../../utils/fileUtils';
 
 interface InvitationDetailModalProps {
   invitation: Invitation | null;
@@ -22,9 +22,11 @@ export const InvitationDetailModal: React.FC<InvitationDetailModalProps> = ({
   onOpenReminder,
   isChairman,
 }) => {
+  const [imgError, setImgError] = useState(false);
+
   if (!isOpen || !invitation) return null;
 
-  const backendHost = API_BASE_URL.replace('/api/v1', '');
+  const attachmentUrl = getFileUrl(invitation.attachmentPath);
   const isImportant = invitation.priority === 'IMPORTANT';
   const isImage =
     invitation.attachmentPath &&
@@ -152,21 +154,32 @@ export const InvitationDetailModal: React.FC<InvitationDetailModalProps> = ({
                 Attachment Preview
               </h4>
               <div className="rounded-2xl border border-slate-200/80 overflow-hidden bg-slate-900 p-2 flex items-center justify-center min-h-60 max-h-96">
-                {isImage ? (
+                {isImage && !imgError ? (
                   <img
-                    src={`${backendHost}${invitation.attachmentPath}`}
+                    src={attachmentUrl}
                     alt="Invitation Attachment Scan"
                     className="max-h-88 object-contain rounded-xl shadow-md"
-                    onError={(e) => {
-                      console.error('Image load error:', invitation.attachmentPath);
-                    }}
+                    onError={() => setImgError(true)}
                   />
+                ) : isImage && imgError ? (
+                  <div className="py-10 text-center text-slate-300">
+                    <ImageOff className="w-10 h-10 mx-auto mb-2 text-slate-500" />
+                    <p className="text-xs font-semibold text-slate-400">Image preview unavailable</p>
+                    <a
+                      href={attachmentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Open Attachment Link <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 ) : isPdf ? (
                   <div className="py-12 text-center text-white">
                     <FileText className="w-12 h-12 text-brand-400 mx-auto mb-2" />
                     <p className="text-xs font-semibold">PDF Document Attached</p>
                     <a
-                      href={`${backendHost}${invitation.attachmentPath}`}
+                      href={attachmentUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors"
@@ -176,7 +189,7 @@ export const InvitationDetailModal: React.FC<InvitationDetailModalProps> = ({
                   </div>
                 ) : (
                   <a
-                    href={`${backendHost}${invitation.attachmentPath}`}
+                    href={attachmentUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-brand-400 text-xs font-bold underline"

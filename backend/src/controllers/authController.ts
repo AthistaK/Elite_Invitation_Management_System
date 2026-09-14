@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma';
 import { generateToken } from '../utils/jwt';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { sendPushNotificationToUser } from '../utils/pushService';
 
 // Check if Chairman account exists in DB
 export async function getBootstrapStatus(req: Request, res: Response): Promise<void> {
@@ -190,15 +191,22 @@ export async function registerManagement(req: Request, res: Response): Promise<v
     // Notify Chairman
     const chairman = await prisma.user.findFirst({ where: { role: 'CHAIRMAN' } });
     if (chairman) {
+      const message = `${user.fullName} (${user.email}) registered as a Management Member and is awaiting approval.`;
       await prisma.notification.create({
         data: {
           userId: chairman.id,
           type: 'MANAGEMENT_REGISTRATION',
           title: 'New Member Registration',
-          message: `${user.fullName} (${user.email}) registered as a Management Member and is awaiting approval.`,
+          message,
           relatedEntity: 'User',
           relatedEntityId: user.id,
         },
+      });
+
+      await sendPushNotificationToUser(chairman.id, {
+        title: 'New Member Registration',
+        message,
+        url: '/chairman/pending-requests',
       });
     }
 

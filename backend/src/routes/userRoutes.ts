@@ -9,6 +9,7 @@ import {
   deactivateUser,
   resetUserPassword,
   deleteUser,
+  transferChairman,
 } from '../controllers/userController';
 import { authenticateToken } from '../middleware/auth';
 import { requireChairman } from '../middleware/rbac';
@@ -20,6 +21,7 @@ router.use(authenticateToken, requireChairman);
 
 router.get('/', getUsers);
 router.post('/', addUser);
+router.post('/transfer-chairman', transferChairman);
 router.put('/:id', updateUser);
 router.post('/:id/approve', approveUser);
 router.post('/:id/reject', rejectUser);
