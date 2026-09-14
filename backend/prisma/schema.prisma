@@ -1,0 +1,95 @@
+// Prisma Schema for Elite Invitation Management System (EIMS)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  fullName      String
+  email         String   @unique
+  passwordHash  String
+  phone         String?
+  profilePhoto  String?
+  role          String   // 'CHAIRMAN' | 'OFFICE' | 'FAMILY'
+  accountStatus String   // 'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE'
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  uploadedInvitations Invitation[]      @relation("UploadedInvitations")
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+  contactMessages     ContactMessage[]
+  reminders           Reminder[]
+}
+
+model Invitation {
+  id                     String     @id @default(uuid())
+  organizationFamilyName String
+  date                   DateTime
+  priority               String     // 'IMPORTANT' | 'NORMAL'
+  invitationRole         String     @default("ATTENDEE") // 'CHIEF_GUEST' | 'GUEST_OF_HONOUR' | 'SPECIAL_INVITEE' | 'ATTENDEE' | 'OTHER'
+  role                   String     @default("OFFICE")   // 'OFFICE' | 'FAMILY'
+  category               String     @default("COLLEGE")  // 'COLLEGE' | 'FAMILY' | 'GOVERNMENT' | 'PERSONAL' | 'OTHERS'
+  remarks                String?
+  attachmentPath         String?
+  uploadedById           String
+  uploadedBy             User       @relation("UploadedInvitations", fields: [uploadedById], references: [id], onDelete: Cascade)
+  status                 String     @default("PENDING") // 'PENDING' | 'ACCEPTED' | 'REJECTED'
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  reminders              Reminder[]
+}
+
+model Reminder {
+  id               String     @id @default(uuid())
+  invitationId     String
+  invitation       Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminderDatetime DateTime
+  status           String     @default("ACTIVE") // 'ACTIVE' | 'DUE' | 'DISMISSED'
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String   // 'MANAGEMENT_REGISTRATION' | 'MEMBER_APPROVAL' | 'MEMBER_REJECTION' | 'INVITATION_UPLOAD' | 'INVITATION_ACCEPTED' | 'INVITATION_REJECTED' | 'REMINDER_DUE' | 'PROFILE_UPDATE'
+  title           String
+  message         String
+  relatedEntity   String?
+  relatedEntityId String?
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  description String
+  entityType  String?
+  entityId    String?
+  createdAt   DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name      String
+  email     String
+  message   String
+  status    String   @default("UNREAD") // 'UNREAD' | 'READ'
+  createdAt DateTime @default(now())
+}
