@@ -9,44 +9,72 @@ self.addEventListener('activate', (event) => {
 
 // Handle incoming Web Push Notifications
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
+  console.log('[SW PUSH] Push event received');
 
-  try {
-    const data = event.data.json();
-    const title = data.title || 'EIMS Notification';
-    const invitationId = data.invitationId || data.entityId || null;
-    let targetUrl = data.url || '/';
+  let data = {};
 
-    if (invitationId && !targetUrl.includes('invitationId=')) {
-      if (targetUrl.includes('?')) {
-        targetUrl += `&invitationId=${invitationId}`;
-      } else {
-        targetUrl += `?invitationId=${invitationId}`;
+  if (event.data) {
+    try {
+      data = event.data.json();
+      console.log('[SW PUSH] Payload parsed', data);
+    } catch (err) {
+      try {
+        const textPayload = event.data.text();
+        if (textPayload) {
+          data = { body: textPayload };
+        }
+        console.log('[SW PUSH] Payload parsed', data);
+      } catch (textErr) {
+        console.log('[SW PUSH] Payload parsed');
       }
     }
-
-    const notificationTag = data.tag || `eims-${invitationId || Date.now()}`;
-
-    const options = {
-      body: data.body || 'You have a new update in EIMS.',
-      icon: data.icon || '/icon-192.png',
-      badge: data.badge || '/icon-192.png',
-      tag: notificationTag,
-      renotify: true,
-      data: {
-        url: targetUrl,
-        invitationId: invitationId,
-        entityId: data.entityId || invitationId,
-        timestamp: data.timestamp || Date.now(),
-      },
-      vibrate: [200, 100, 200],
-      requireInteraction: true,
-    };
-
-    event.waitUntil(self.registration.showNotification(title, options));
-  } catch (err) {
-    console.error('Error rendering incoming push notification payload:', err);
+  } else {
+    console.log('[SW PUSH] Payload parsed');
   }
+
+  const title = data.title || 'EIMS';
+  const body = data.body || data.message || 'You have a new update in EIMS.';
+  const invitationId = data.invitationId || data.entityId || null;
+  let targetUrl = data.url || '/';
+
+  if (invitationId && !targetUrl.includes('invitationId=')) {
+    if (targetUrl.includes('?')) {
+      targetUrl += `&invitationId=${invitationId}`;
+    } else {
+      targetUrl += `?invitationId=${invitationId}`;
+    }
+  }
+
+  const notificationTag = data.tag || `eims-push-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+  const options = {
+    body: body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: notificationTag,
+    renotify: true,
+    data: {
+      url: targetUrl,
+      invitationId: invitationId,
+      entityId: data.entityId || invitationId,
+      timestamp: data.timestamp || Date.now(),
+    },
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+  };
+
+  console.log('[SW PUSH] Calling showNotification');
+
+  const showPromise = self.registration
+    .showNotification(title, options)
+    .then(() => {
+      console.log('[SW PUSH] Notification displayed');
+    })
+    .catch((err) => {
+      console.error('[SW PUSH] Error showing notification:', err);
+    });
+
+  event.waitUntil(showPromise);
 });
 
 // Handle notification click event
@@ -69,7 +97,9 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(targetUrl);
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
           return client.focus();
         }
       }
@@ -79,3 +109,4 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
