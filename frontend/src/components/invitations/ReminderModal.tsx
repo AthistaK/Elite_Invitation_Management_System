@@ -50,9 +50,10 @@ export const ReminderModal: React.FC<ReminderModalProps> = ({ invitation, isOpen
 
     try {
       setLoading(true);
+      const targetDate = new Date(reminderDatetime);
       await api.post('/reminders', {
         invitationId: invitation.id,
-        reminderDatetime,
+        reminderDatetime: targetDate.toISOString(),
       });
 
       setSuccessMsg('Reminder scheduled successfully! The notification system will alert you when due.');

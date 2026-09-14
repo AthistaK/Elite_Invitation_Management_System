@@ -114,9 +114,14 @@ export async function triggerDueReminders(): Promise<void> {
       },
     });
 
+    if (activeReminders.length > 0) {
+      console.log(`[REMINDER] Found ${activeReminders.length} due reminder(s) at ${now.toISOString()}`);
+    }
+
     for (const reminder of activeReminders) {
       const message = `Reminder: You have an upcoming invitation for "${reminder.invitation.organizationFamilyName}" scheduled on ${new Date(reminder.invitation.date).toLocaleDateString()}.`;
-      await prisma.notification.create({
+      
+      const notif = await prisma.notification.create({
         data: {
           userId: reminder.userId,
           type: 'REMINDER_DUE',
@@ -127,18 +132,25 @@ export async function triggerDueReminders(): Promise<void> {
         },
       });
 
-      await sendPushNotificationToUser(reminder.userId, {
+      console.log(`[REMINDER] Notification record created ID: ${notif.id} for user: ${reminder.userId}`);
+
+      sendPushNotificationToUser(reminder.userId, {
         title: 'Invitation Reminder Due',
         message,
-        url: '/chairman/invitations',
-      });
+        type: 'REMINDER_DUE',
+        invitationId: reminder.invitationId,
+        entityId: reminder.invitationId,
+        url: `/chairman/invitations?invitationId=${reminder.invitationId}`,
+      }).catch((err) => console.error('[REMINDER] Web push trigger error:', err));
 
       await prisma.reminder.update({
         where: { id: reminder.id },
         data: { status: 'DUE' },
       });
+
+      console.log(`[REMINDER] Reminder ID: ${reminder.id} updated status to DUE`);
     }
   } catch (err) {
-    console.error('Error processing due reminders:', err);
+    console.error('[REMINDER] Error processing due reminders:', err);
   }
 }

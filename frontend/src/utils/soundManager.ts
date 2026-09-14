@@ -59,13 +59,19 @@ export function playNotificationSound(): void {
     initAudioContext();
     if (!audioCtx) return;
 
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().then(() => playChimeSequence(audioCtx!)).catch(() => {});
-    } else {
+    if (audioCtx.state === 'running') {
       playChimeSequence(audioCtx);
+    } else if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        if (audioCtx?.state === 'running') {
+          playChimeSequence(audioCtx);
+        }
+      }).catch(() => {
+        // Silently ignore if AudioContext resume blocked by browser autoplay policy
+      });
     }
   } catch (err) {
-    console.warn('Failed to play notification sound:', err);
+    // Sound failure must NEVER break notification processing or UI execution
   }
 }
 
