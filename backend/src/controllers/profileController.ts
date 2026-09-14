@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma';
 import { logActivity } from '../utils/logger';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { sendPushNotificationToUser } from '../utils/pushService';
+import { processFileStorage } from '../utils/storage';
 
 export async function updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -38,7 +39,8 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
 
     let profilePhoto = user.profilePhoto;
     if (req.file) {
-      profilePhoto = `/uploads/${req.file.filename}`;
+      const storedFile = await processFileStorage(req.file);
+      profilePhoto = storedFile.url;
     }
 
     const updatedUser = await prisma.user.update({

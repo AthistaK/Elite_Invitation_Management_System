@@ -131,7 +131,8 @@ export async function createInvitation(req: AuthenticatedRequest, res: Response)
 
     let attachmentPath = null;
     if (req.file) {
-      attachmentPath = `/uploads/${req.file.filename}`;
+      const storedFile = await processFileStorage(req.file);
+      attachmentPath = storedFile.url;
     }
 
     const invitationDate = new Date(date);
@@ -232,14 +233,8 @@ export async function updateInvitation(req: AuthenticatedRequest, res: Response)
 
     let attachmentPath = existing.attachmentPath;
     if (req.file) {
-      // Remove old file if exists
-      if (existing.attachmentPath) {
-        const oldFile = path.join(__dirname, '../../', existing.attachmentPath);
-        if (fs.existsSync(oldFile)) {
-          fs.unlinkSync(oldFile);
-        }
-      }
-      attachmentPath = `/uploads/${req.file.filename}`;
+      const storedFile = await processFileStorage(req.file);
+      attachmentPath = storedFile.url;
     }
 
     const updated = await prisma.invitation.update({
