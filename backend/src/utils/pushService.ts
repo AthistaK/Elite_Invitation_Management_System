@@ -64,7 +64,10 @@ export async function sendPushNotificationToUser(userId: string, payload: PushPa
           console.log(`[PUSH] Subscription expired/invalid (${err.statusCode}). Removed stale sub ID: ${sub.id}`);
           await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
         } else {
-          console.error(`[PUSH] Push failed for sub ID ${sub.id}:`, err.message || err);
+          console.error(`[PUSH] Push failed for sub ID ${sub.id}`);
+          console.error(`[PUSH] Status: ${err.statusCode || 'N/A'}`);
+          console.error(`[PUSH] Body: ${err.body || 'N/A'}`);
+          console.error(`[PUSH] Message: ${err.message || 'N/A'}`);
         }
       }
     });
