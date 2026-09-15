@@ -32,11 +32,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.data.user) {
         setUser(res.data.user);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Session validation failed:', err);
-      localStorage.removeItem('eims_token');
-      setToken(null);
-      setUser(null);
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        localStorage.removeItem('eims_token');
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

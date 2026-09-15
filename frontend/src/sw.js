@@ -1,4 +1,5 @@
-// Service Worker for Elite Invitation Management System (EIMS) Web Push & PWA
+// Custom Push & PWA Service Worker for Elite Invitation Management System (EIMS)
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -33,7 +34,7 @@ self.addEventListener('push', (event) => {
   }
 
   const title = data.title || 'EIMS';
-  const body = data.body || data.message || 'You have a new update in EIMS.';
+  const body = data.body || data.message || 'You have a new notification.';
   const invitationId = data.invitationId || data.entityId || null;
   let targetUrl = data.url || '/';
 
@@ -46,11 +47,12 @@ self.addEventListener('push', (event) => {
   }
 
   const notificationTag = data.tag || `eims-push-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const iconUrl = new URL('/icon-192.png', self.location.origin).href;
 
   const options = {
     body: body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: iconUrl,
+    badge: iconUrl,
     tag: notificationTag,
     renotify: true,
     data: {
@@ -109,4 +111,3 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
-

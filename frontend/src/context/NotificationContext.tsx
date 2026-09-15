@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { NotificationItem } from '../types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
-import { subscribeToPushNotifications } from '../utils/pushManager';
+import { subscribeToPushNotifications, isPushSupported } from '../utils/pushManager';
 import { playNotificationSound, isSoundEnabled, setSoundEnabled } from '../utils/soundManager';
 
 interface NotificationContextType {
@@ -63,7 +63,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     fetchNotifications();
 
-    if (user && 'Notification' in window && Notification.permission === 'granted') {
+    if (user && isPushSupported() && Notification.permission !== 'denied') {
       subscribeToPushNotifications().catch(() => {});
     }
 

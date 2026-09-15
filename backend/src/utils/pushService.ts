@@ -52,7 +52,12 @@ export async function sendPushNotificationToUser(userId: string, payload: PushPa
       };
 
       try {
-        await webpush.sendNotification(pushSub, pushPayloadStr);
+        await webpush.sendNotification(pushSub, pushPayloadStr, {
+          headers: {
+            Urgency: 'high',
+          },
+          TTL: 86400,
+        });
         console.log(`[PUSH] Invitation push delivered successfully`);
       } catch (err: any) {
         if (err.statusCode === 404 || err.statusCode === 410) {

@@ -23,6 +23,21 @@ import { Profile } from './pages/chairman/Profile';
 import { Contact } from './pages/chairman/Contact';
 import { Settings } from './pages/chairman/Settings';
 
+// Public Route Guard (Auto-restores session & redirects logged-in users to dashboard)
+const PublicOnlyGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-8 text-center text-xs text-slate-400 bg-slate-950 min-h-screen flex items-center justify-center">Restoring session...</div>;
+  if (user) {
+    if (user.role === 'CHAIRMAN') {
+      return <Navigate to="/chairman/dashboard" replace />;
+    }
+    if ((user.role === 'OFFICE' || user.role === 'FAMILY') && user.accountStatus === 'APPROVED') {
+      return <Navigate to="/management/dashboard" replace />;
+    }
+  }
+  return <>{children}</>;
+};
+
 // Chairman Route Guard
 const ChairmanGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -52,14 +67,14 @@ export function App() {
       <NotificationProvider>
         <BrowserRouter>
           <Routes>
-            {/* First Screen: Portal Selection */}
-            <Route path="/" element={<PortalSelection />} />
+            {/* First Screen / Public Routes wrapped with Session Auto-Redirect */}
+            <Route path="/" element={<PublicOnlyGuard><PortalSelection /></PublicOnlyGuard>} />
 
             {/* Auth Routes */}
-            <Route path="/chairman/setup" element={<ChairmanSetup />} />
-            <Route path="/chairman/login" element={<ChairmanLogin />} />
-            <Route path="/management/login" element={<ManagementLogin />} />
-            <Route path="/management/register" element={<ManagementRegister />} />
+            <Route path="/chairman/setup" element={<PublicOnlyGuard><ChairmanSetup /></PublicOnlyGuard>} />
+            <Route path="/chairman/login" element={<PublicOnlyGuard><ChairmanLogin /></PublicOnlyGuard>} />
+            <Route path="/management/login" element={<PublicOnlyGuard><ManagementLogin /></PublicOnlyGuard>} />
+            <Route path="/management/register" element={<PublicOnlyGuard><ManagementRegister /></PublicOnlyGuard>} />
 
             {/* Chairman Protected Routes */}
             <Route path="/chairman/dashboard" element={<ChairmanGuard><ChairmanDashboard /></ChairmanGuard>} />
