@@ -18,19 +18,23 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { api } from '../../services/api';
 import {
-  getNotificationPermissionState,
-  isPushSubscribed,
-  subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
 } from '../../utils/pushManager';
 
 export const Settings: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [permissionState, setPermissionState] = useState<string>('default');
-  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const {
+    pushPermission: permissionState,
+    isPushSubscribed: isSubscribed,
+    pushLoading: contextPushLoading,
+    enablePushNotifications,
+    checkPushStatus,
+  } = useNotifications();
+
   const [pushStatusMsg, setPushStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pushLoading, setPushLoading] = useState(false);
   const [testPushLoading, setTestPushLoading] = useState(false);
@@ -45,24 +49,10 @@ export const Settings: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [transferLoading, setTransferLoading] = useState(false);
 
-  const checkSubscriptionStatus = async () => {
-    setPermissionState(getNotificationPermissionState());
-    const subscribed = await isPushSubscribed();
-    setIsSubscribed(subscribed);
-  };
-
-  useEffect(() => {
-    checkSubscriptionStatus();
-  }, []);
-
   const handleEnablePush = async () => {
-    setPushLoading(true);
     setPushStatusMsg(null);
-    const res = await subscribeToPushNotifications();
-    setPushLoading(false);
-
+    const res = await enablePushNotifications();
     if (res.success) {
-      await checkSubscriptionStatus();
       setPushStatusMsg({ type: 'success', text: res.message });
     } else {
       setPushStatusMsg({ type: 'error', text: res.message });
@@ -76,7 +66,7 @@ export const Settings: React.FC = () => {
     setPushLoading(false);
 
     if (res.success) {
-      await checkSubscriptionStatus();
+      await checkPushStatus();
       setPushStatusMsg({ type: 'success', text: res.message });
     } else {
       setPushStatusMsg({ type: 'error', text: res.message });

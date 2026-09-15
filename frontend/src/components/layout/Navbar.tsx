@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Bell,
+  BellRing,
+  BellOff,
+  CheckCircle2,
   User as UserIcon,
   LogOut,
   Settings as SettingsIcon,
@@ -13,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { isPushSupported } from '../../utils/pushManager';
 import { DynamicGreeting } from '../common/DynamicGreeting';
 import { getFileUrl } from '../../utils/fileUtils';
 
@@ -28,7 +32,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenMobileMenu,
 }) => {
   const { user, logout } = useAuth();
-  const { unreadCount, soundEnabled, toggleSound } = useNotifications();
+  const {
+    unreadCount,
+    soundEnabled,
+    toggleSound,
+    pushPermission,
+    isPushSubscribed,
+    pushLoading,
+    enablePushNotifications,
+  } = useNotifications();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -71,6 +83,39 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
+        {/* Web Push Notification Control Button / Status */}
+        {isPushSupported() && (
+          <>
+            {pushPermission === 'denied' ? (
+              <div
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"
+                title="Notifications are blocked in browser settings. Enable them from browser settings."
+              >
+                <BellOff className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="hidden sm:inline">Notifications Blocked</span>
+              </div>
+            ) : isPushSubscribed || pushPermission === 'granted' ? (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold"
+                title="Web Push Notifications are active on this device."
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="hidden md:inline">Notifications Enabled</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => enablePushNotifications()}
+                disabled={pushLoading}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                title="Tap to enable mobile and browser push notification popups"
+              >
+                <BellRing className="w-4 h-4 animate-bounce text-brand-200 shrink-0" />
+                <span className="text-[11px] sm:text-xs">{pushLoading ? 'Enabling...' : 'Enable Notifications'}</span>
+              </button>
+            )}
+          </>
+        )}
+
         {/* Audio Sound Toggle */}
         <button
           onClick={toggleSound}

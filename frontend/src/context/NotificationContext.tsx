@@ -2,15 +2,28 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { NotificationItem } from '../types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
-import { subscribeToPushNotifications, isPushSupported } from '../utils/pushManager';
+import {
+  subscribeToPushNotifications,
+  isPushSupported,
+  getNotificationPermissionState,
+  isPushSubscribed,
+} from '../utils/pushManager';
 import { playNotificationSound, isSoundEnabled, setSoundEnabled } from '../utils/soundManager';
+
+export type PushPermissionStatus = 'granted' | 'denied' | 'default' | 'unsupported';
 
 interface NotificationContextType {
   notifications: NotificationItem[];
   unreadCount: number;
   loading: boolean;
   soundEnabled: boolean;
+  pushPermission: PushPermissionStatus;
+  isPushSubscribed: boolean;
+  pushLoading: boolean;
+  pushMessage: string | null;
   toggleSound: () => void;
+  enablePushNotifications: () => Promise<{ success: boolean; message: string }>;
+  checkPushStatus: () => Promise<void>;
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -24,12 +37,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(isSoundEnabled());
+  const [pushPermission, setPushPermission] = useState<PushPermissionStatus>(getNotificationPermissionState());
+  const [isPushSubscribedState, setIsPushSubscribedState] = useState<boolean>(false);
+  const [pushLoading, setPushLoading] = useState<boolean>(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
   const prevUnreadCountRef = useRef<number | null>(null);
+
+  const checkPushStatus = async () => {
+    const perm = getNotificationPermissionState();
+    setPushPermission(perm);
+    const subscribed = await isPushSubscribed();
+    setIsPushSubscribedState(subscribed);
+  };
 
   const toggleSound = () => {
     const nextState = !soundEnabled;
     setSoundEnabled(nextState);
     setSoundEnabledState(nextState);
+  };
+
+  const enablePushNotifications = async (): Promise<{ success: boolean; message: string }> => {
+    setPushLoading(true);
+    setPushMessage(null);
+    try {
+      const res = await subscribeToPushNotifications();
+      await checkPushStatus();
+      setPushMessage(res.message);
+      return res;
+    } catch (err: any) {
+      const msg = err.message || 'Failed to enable notifications.';
+      setPushMessage(msg);
+      return { success: false, message: msg };
+    } finally {
+      setPushLoading(false);
+    }
   };
 
   const fetchNotifications = async () => {
@@ -62,8 +103,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     fetchNotifications();
+    checkPushStatus();
 
-    if (user && isPushSupported() && Notification.permission !== 'denied') {
+    // Silently refresh subscription ONLY if permission is ALREADY granted (laptop/existing device)
+    // NEVER call requestPermission automatically during page load to respect Android Chrome gesture requirement
+    if (user && isPushSupported() && Notification.permission === 'granted') {
       subscribeToPushNotifications().catch(() => {});
     }
 
@@ -110,7 +154,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         unreadCount,
         loading,
         soundEnabled,
+        pushPermission,
+        isPushSubscribed: isPushSubscribedState,
+        pushLoading,
+        pushMessage,
         toggleSound,
+        enablePushNotifications,
+        checkPushStatus,
         fetchNotifications,
         markAsRead,
         markAllAsRead,
