@@ -88,29 +88,31 @@ export const Navbar: React.FC<NavbarProps> = ({
           <>
             {pushPermission === 'denied' ? (
               <div
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-[11px] sm:text-xs font-semibold shrink-0"
                 title="Notifications are blocked in browser settings. Enable them from browser settings."
               >
-                <BellOff className="w-4 h-4 text-rose-600 shrink-0" />
-                <span className="hidden sm:inline">Notifications Blocked</span>
+                <BellOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-600 shrink-0" />
+                <span>Notifications Blocked</span>
               </div>
             ) : isPushSubscribed || pushPermission === 'granted' ? (
-              <div
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold"
-                title="Web Push Notifications are active on this device."
+              <button
+                onClick={() => enablePushNotifications()}
+                disabled={pushLoading}
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] sm:text-xs font-semibold shrink-0 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                title="Web Push Notifications are active. Tap to re-sync push subscription."
               >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="hidden md:inline">Notifications Enabled</span>
-              </div>
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+                <span>{pushLoading ? 'Syncing...' : 'Notifications Enabled'}</span>
+              </button>
             ) : (
               <button
                 onClick={() => enablePushNotifications()}
                 disabled={pushLoading}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
                 title="Tap to enable mobile and browser push notification popups"
               >
-                <BellRing className="w-4 h-4 animate-bounce text-brand-200 shrink-0" />
-                <span className="text-[11px] sm:text-xs">{pushLoading ? 'Enabling...' : 'Enable Notifications'}</span>
+                <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-bounce text-brand-200 shrink-0" />
+                <span>{pushLoading ? 'Enabling...' : 'Enable Notifications'}</span>
               </button>
             )}
           </>
